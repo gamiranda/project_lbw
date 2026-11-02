@@ -1,0 +1,64 @@
+name: Gerar relatórios SINASC
+
+on:
+  schedule:
+    - cron: "0 9 1 * *"   # todo dia 1, às 09:00 UTC: gera só os anos que ainda não têm PDF
+  workflow_dispatch:       # botão manual na aba Actions
+    inputs:
+      anos:
+        description: "Anos separados por espaço, ex.: 2024 2025 (vazio = só os que faltam)"
+        required: false
+        default: ""
+      force:
+        description: "Regerar mesmo que o PDF já exista"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write          # necessário para o commit dos PDFs
+
+concurrency:
+  group: build-reports     # evita duas execuções ao mesmo tempo
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-build.txt
+
+      - name: Instalar dependências Python
+        run: pip install -r requirements-build.txt
+
+      - uses: quarto-dev/quarto-actions/setup@v2
+        with:
+          tinytex: true
+
+      - name: Gerar PDFs
+        env:
+          ANOS: ${{ inputs.anos }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          ARGS=""
+          if [ -n "$ANOS" ]; then ARGS="$ARGS --anos $ANOS"; fi
+          if [ "$FORCE" = "true" ]; then ARGS="$ARGS --force"; fi
+          python scripts/build_reports.py $ARGS
+
+      - name: Publicar PDFs no repositório
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reports/
+          if git diff --cached --quiet; then
+            echo "Nenhum relatório novo."
+          else
+            git commit -m "Atualiza relatórios SINASC"
+            git push
+          fi
