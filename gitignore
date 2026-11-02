@@ -1,13 +1,8 @@
-# dados baixados (grandes, reproduzíveis)
 data/
 *.parquet
-
-# Python
 __pycache__/
 .venv/
 .ipynb_checkpoints/
-
-# arquivos intermediários do Quarto/LaTeX
 .quarto/
 report/*_files/
 report/*.html

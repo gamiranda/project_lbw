@@ -169,7 +169,7 @@ mapa_dia_semana = {
 }
 
 f.plot_bars_pct(
-    df, "DAY_WEEK", mapa=mapa_dia_semana, valor_nulo=99,
+    df, "DAY_WEEK", mapa=mapa_dia_semana, valor_nulo=99, rotacao = 20,
     titulo="Nascimentos por dia da semana", xlabel="Dia da semana",
 )
 ```
@@ -185,7 +185,7 @@ f.plot_hist(
 
 ```{python}
 f.plot_bars_pct(
-    df, "REGIAO", ordem=f.ORDEM_REGIAO,
+    df, "REGIAO", ordem=f.ORDEM_REGIAO, rotacao = 20,
     titulo="Nascimentos por região de residência da mãe", xlabel="Região",
 )
 ```
@@ -269,7 +269,7 @@ histograma.show()
 
 ```{python}
 f.plot_bars_pct(
-    df, "FAIXA_IDADEMAE", ordem=f.ORDEM_FAIXA_IDADEMAE,
+    df, "FAIXA_IDADEMAE", ordem=f.ORDEM_FAIXA_IDADEMAE, rotacao = 20, 
     titulo="Nascimentos por faixa etária da mãe", xlabel="Faixa etária",
 )
 ```
@@ -298,7 +298,7 @@ mapa_estcivmae = {
     9: "Ignorada",
 }
 
-f.plot_bars(df = df_mother, variavel = "ESTCIVMAE", mapa = mapa_estcivmae, titulo = "Estado civil da mãe", xlabel = "Estado civil")
+f.plot_bars(df = df_mother, variavel = "ESTCIVMAE", mapa = mapa_estcivmae, titulo = "Estado civil da mãe", xlabel = "Estado civil", rotacao = 20,)
 ```
 
 ```{python}
@@ -311,7 +311,7 @@ mapa_racacor = {
     9: "Ignorado"
 }
 
-f.plot_bars(df = df_mother, variavel = "RACACORMAE", mapa = mapa_racacor, titulo = "Raça/cor da mãe", xlabel = "Raça/cor")
+f.plot_bars(df = df_mother, variavel = "RACACORMAE", rotacao = 20, mapa = mapa_racacor, titulo = "Raça/cor da mãe", xlabel = "Raça/cor")
 ```
 
 
@@ -333,7 +333,7 @@ mapa_escmaeagr1 = {
 }
 
 
-f.plot_bars(df = df_mother, variavel = "ESCMAEAGR1", mapa = mapa_escmaeagr1, titulo = "Escolaridade da mãe (agregada, 2010)", xlabel = "Escolaridade", tamanho_texto = 6)
+f.plot_bars(df = df_mother, variavel = "ESCMAEAGR1", rotacao = 20, mapa = mapa_escmaeagr1, titulo = "Escolaridade da mãe (agregada, 2010)", xlabel = "Escolaridade", tamanho_texto = 6)
 ```
 
 ```{python}
@@ -354,14 +354,14 @@ df_mother = df_mother.with_columns(
     .alias("QTDGESTANT")
 )
 
-f.plot_bars(df = df_mother, variavel = "QTDGESTANT", mapa = mapa_qtgest, titulo = "Quantidade de gestações anteriores", xlabel = "Qtd. gestações anteriores")
+f.plot_bars(df = df_mother, variavel = "QTDGESTANT", rotacao = 20, mapa = mapa_qtgest, titulo = "Quantidade de gestações anteriores", xlabel = "Qtd. gestações anteriores")
 ```
 
 ```{python}
 mapa_paridade = {0: "Nulípara (primeiro parto)", 1: "Multípara", 9: "Ignorado"}
 
 f.plot_bars_pct(
-    df, "PARIDADE", mapa=mapa_paridade,
+    df, "PARIDADE", mapa=mapa_paridade, rotacao = 20,
     titulo="Paridade da mãe", xlabel="Paridade",
 )
 ```
@@ -370,7 +370,7 @@ f.plot_bars_pct(
 mapa_filvivo = {0: "Nenhum", 1: "1", 2: "2", 3: "3 ou mais", 9: "Ignorado"}
 
 f.plot_bars_pct(
-    f.cap_count(df, "QTDFILVIVO", teto=3), "QTDFILVIVO", mapa=mapa_filvivo,
+    f.cap_count(df, "QTDFILVIVO", teto=3), "QTDFILVIVO", mapa=mapa_filvivo, 
     titulo="Filhos vivos anteriores", xlabel="Número de filhos vivos",
 )
 ```
@@ -459,7 +459,7 @@ f.plot_hist(
 mapa_gravidez = {1: "Única", 2: "Dupla", 3: "Tripla ou mais", 9: "Ignorado"}
 
 f.plot_bars_pct(
-    df, "GRAVIDEZ", mapa=mapa_gravidez,
+    df, "GRAVIDEZ", mapa=mapa_gravidez, rotacao = 20,
     titulo="Tipo de gravidez", xlabel="Tipo de gravidez",
 )
 ```
@@ -476,7 +476,7 @@ mapa_consultas = {
 }
 
 f.plot_bars_pct(
-    df, "CONSULTAS", mapa=mapa_consultas,
+    df, "CONSULTAS", mapa=mapa_consultas, rotacao = 20,
     titulo="Consultas de pré-natal (faixas)", xlabel="Consultas de pré-natal",
 )
 ```
@@ -495,7 +495,7 @@ mapa_mesprenat[0] = "0"
 f.plot_bars_pct(
     df, "MESPRENAT", mapa=mapa_mesprenat, valor_nulo=99,
     titulo="Mês de gestação em que o pré-natal foi iniciado", xlabel="Mês de início do pré-natal",
-    rotacao=0,
+    rotacao=20,
 )
 ```
 
@@ -540,12 +540,10 @@ O índice de Kotelchuck combina o mês de início do pré-natal e o número de c
 mapa_parto = {1: "Vaginal", 2: "Cesário", 9: "Ignorado"}
 
 f.plot_bars_pct(
-    df, "PARTO", mapa=mapa_parto,
+    df, "PARTO", mapa=mapa_parto, rotacao = 20,
     titulo="Tipo de parto", xlabel="Tipo de parto",
 )
 ```
-
-A proporção de partos cesáreos foi de **`{python} f.fmt_pct(cesarea)`**. Para referência, a Organização Mundial da Saúde (2015) afirma que taxas populacionais acima de 10% não estão associadas a redução da mortalidade materna e neonatal.
 
 ```{python}
 tab_ces_uf = f.indicadores_por_grupo(df, "UF", {"Cesárea (%)": "IND_CESAREA"})
@@ -599,7 +597,7 @@ f.tabela(
 mapa_tpapresent = {1: "Cefálico", 2: "Pélvica ou podálica", 3: "Transversa", 9: "Ignorado"}
 
 f.plot_bars_pct(
-    df, "TPAPRESENT", mapa=mapa_tpapresent,
+    df, "TPAPRESENT", mapa=mapa_tpapresent, rotacao = 20,
     titulo="Apresentação fetal", xlabel="Apresentação",
 )
 ```
@@ -608,7 +606,7 @@ f.plot_bars_pct(
 mapa_sttrabpart = {1: "Sim", 2: "Não", 3: "Não se aplica", 9: "Ignorado"}
 
 f.plot_bars_pct(
-    df, "STTRABPART", mapa=mapa_sttrabpart,
+    df, "STTRABPART", mapa=mapa_sttrabpart, rotacao = 20,
     titulo="Trabalho de parto induzido", xlabel="Trabalho de parto induzido",
 )
 ```
@@ -623,7 +621,7 @@ mapa_tpnascassi = {
 }
 
 f.plot_bars_pct(
-    df, "TPNASCASSI", mapa=mapa_tpnascassi,
+    df, "TPNASCASSI", mapa=mapa_tpnascassi, rotacao = 20,
     titulo="Responsável pela assistência ao parto", xlabel="Profissional",
 )
 ```
@@ -642,7 +640,7 @@ n_fem = tab_sexo.filter(pl.col("Sexo") == "Feminino")["Nascimentos"].sum()
 razao_sexos = n_masc / n_fem * 100
 
 f.plot_bars_pct(
-    df, "SEXO", mapa=mapa_sexo,
+    df, "SEXO", mapa=mapa_sexo, rotacao = 20,
     titulo="Sexo do recém-nascido", xlabel="Sexo",
 )
 ```
@@ -651,7 +649,7 @@ Nasceram **`{python} f.fmt_num(razao_sexos, 1)`** meninos para cada 100 meninas.
 
 ```{python}
 f.plot_bars_pct(
-    df, "RACACOR", mapa=mapa_racacor,
+    df, "RACACOR", mapa=mapa_racacor, rotacao = 20,
     titulo="Raça/cor do recém-nascido", xlabel="Raça/cor",
     ordenar_por_freq=True,
 )
