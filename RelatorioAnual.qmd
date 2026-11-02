@@ -1,0 +1,860 @@
+---
+title: "Relatório anual sobre os nascidos vivos no Brasil"
+author: "Gabriel Miranda"
+lang: pt-BR
+jupyter: python3
+format:
+  pdf:
+    colorlinks: true
+    linkcolor: "374e55"
+    urlcolor: "00a1d5"
+    include-in-header:
+      text: |
+        \usepackage{fancyhdr}
+        \usepackage{xcolor}
+        \definecolor{petrol}{HTML}{374E55}
+        \setlength{\headheight}{14pt}
+        \pagestyle{fancy}
+        \fancyhf{}
+        \fancyfoot[R]{\small\color{petrol}Gabriel Miranda · gamiranda.ds@gmail.com}
+        \fancyfoot[C]{\small\thepage}
+        \renewcommand{\headrulewidth}{0pt}
+        \renewcommand{\footrulewidth}{0.4pt}
+editor: source
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{python}
+#| tags: [parameters]
+ano = 2022
+
+# streamlit run app.py
+
+```
+
+```{python}
+#| output: asis
+from IPython.display import Markdown
+Markdown(f"**Sistema de Informações sobre Nascidos Vivos (SINASC) – {ano}**")
+```
+
+```{python}
+import functions as f
+
+import polars as pl
+import plotnine as pn
+import os
+from datetime import datetime
+
+
+jama_colors = ['#374e55', '#df8f44', '#00a1d5', '#b24745']
+
+ANO = ano
+ARQUIVO = f"sinasc_{ANO}.parquet"
+
+if not os.path.exists(ARQUIVO):
+    f.download_sinasc_data(ANO, salvar_parquet=ARQUIVO)
+
+df = pl.read_parquet(ARQUIVO)
+df = (
+    df.pipe(f.remove_unused_features)
+      .pipe(f.create_features)
+      .pipe(f.optimize_dtypes)
+      .pipe(f.set_ignored_to_null)      
+      .pipe(f.create_report_features)  
+)
+
+N = df.height
+```
+
+```{python}
+# Valores usados nos textos do relatório
+cesarea, _ = f.taxa_global(df, "IND_CESAREA")
+baixo_peso, _ = f.taxa_global(df, "IND_BAIXO_PESO")
+prematuro, _ = f.taxa_global(df, "IND_PREMATURO")
+adolescente, _ = f.taxa_global(df, "IND_MAE_ADOLESCENTE")
+```
+
+# Sobre os dados
+
+Este relatório descreve os `{python} f.fmt_int(N)` nascidos vivos registrados no SINASC com data de nascimento em `{python} ANO`. As informações vêm da Declaração de Nascido Vivo (DNV) e foram obtidas no OpenDATASUS.
+
+Alguns cuidados de leitura:
+
+- Códigos de "ignorado" das variáveis numéricas (99 e 9999) foram tratados como ausentes.
+- As taxas são calculadas apenas sobre os registros com informação válida; por isso o denominador varia entre os indicadores (a coluna *Registros válidos* da Tabela de indicadores mostra a completude).
+- Nas variáveis categóricas, a categoria "Ignorado" é mostrada separadamente.
+- As análises são por local de residência da mãe, quando se refere a região e UF.
+
+A consulta foi realizada no dia `{python} datetime.today().strftime("%d/%m/%Y")`. 
+
+\newpage
+
+# Panorama geral
+
+```{python}
+indicadores = {
+    "Partos cesáreos": "IND_CESAREA",
+    "Prematuridade (menos de 37 semanas)": "IND_PREMATURO",
+    "Baixo peso ao nascer (menos de 2.500 g)": "IND_BAIXO_PESO",
+    "Mães adolescentes (até 19 anos)": "IND_MAE_ADOLESCENTE",
+    "Mães com 35 anos ou mais": "IND_MAE_35MAIS",
+    "Gestações múltiplas": "IND_MULTIPLA",
+    "Pré-natal com 7 ou mais consultas": "IND_PRENATAL_7MAIS",
+    "Pré-natal adequado ou mais que adequado (Kotelchuck)": "IND_PRENATAL_ADEQUADO",
+    "Nascimentos em hospital": "IND_HOSPITAL",
+    "Anomalia congênita informada": "IND_ANOMALIA",
+    "Parto fora do município de residência da mãe": "IND_PARTO_FORA_MUN_RESIDENCIA",
+}
+
+linhas = []
+for nome, col in indicadores.items():
+    taxa, validos = f.taxa_global(df, col)
+    linhas.append({
+        "Indicador": nome,
+        "%": taxa,
+        "Registros válidos": validos,
+        "Completude (%)": validos / N * 100,
+    })
+
+f.tabela(pl.DataFrame(linhas), legenda="Principais indicadores dos nascidos vivos.")
+```
+
+```{python}
+f.tabela(
+    f.resumo_numerico(df, {
+        "Idade da mãe (anos)": "IDADEMAE",
+        "Idade do pai (anos)": "IDADEPAI",
+        "Filhos vivos anteriores": "QTDFILVIVO",
+        "Perdas fetais/abortos e filhos mortos anteriores": "QTDFILMORT",
+        "Gestações anteriores": "QTDGESTANT",
+        "Partos vaginais anteriores": "QTDPARTNOR",
+        "Cesáreas anteriores": "QTDPARTCES",
+        "Semanas de gestação": "SEMAGESTAC",
+        "Consultas de pré-natal": "CONSPRENAT",
+        "Mês de início do pré-natal": "MESPRENAT",
+        "Peso ao nascer (g)": "PESO",
+    }),
+    legenda="Estatísticas descritivas das variáveis numéricas (P25 e P75 = primeiro e terceiro quartis).",
+    direita=["Média", "Mediana", "P25", "P75", "Mín.", "Máx."],
+)
+```
+
+\newpage
+
+# Quando e onde nascem os brasileiros
+
+## Distribuição ao longo do tempo
+
+```{python}
+f.plot_line_mensal(df, ANO, titulo=f"Nascimentos por mês de ocorrência, Brasil, {ANO}")
+```
+
+```{python}
+mapa_trimestre = {1: "1º trimestre", 2: "2º trimestre", 3: "3º trimestre", 4: "4º trimestre"}
+
+f.tabela(
+    f.freq_table(df, "QUARTER", mapa_trimestre, rotulo="Trimestre", valor_nulo=99),
+    legenda="Nascimentos por trimestre.",
+)
+```
+
+```{python}
+mapa_dia_semana = {
+    1: "Domingo", 2: "Segunda", 3: "Terça", 4: "Quarta",
+    5: "Quinta", 6: "Sexta", 7: "Sábado",
+}
+
+f.plot_bars_pct(
+    df, "DAY_WEEK", mapa=mapa_dia_semana, valor_nulo=99,
+    titulo="Nascimentos por dia da semana", xlabel="Dia da semana",
+)
+```
+
+```{python}
+f.plot_hist(
+    df, "DAY", binwidth=1,
+    titulo="Nascimentos por dia do mês", xlabel="Dia do mês",
+)
+```
+
+## Regiões e unidades da federação
+
+```{python}
+f.plot_bars_pct(
+    df, "REGIAO", ordem=f.ORDEM_REGIAO,
+    titulo="Nascimentos por região de residência da mãe", xlabel="Região",
+)
+```
+
+```{python}
+tab_regiao = f.indicadores_por_grupo(
+    df, "REGIAO",
+    {
+        "Cesárea (%)": "IND_CESAREA",
+        "Baixo peso (%)": "IND_BAIXO_PESO",
+        "Prematuros (%)": "IND_PREMATURO",
+        "Mães adolescentes (%)": "IND_MAE_ADOLESCENTE",
+        "Pré-natal 7+ consultas (%)": "IND_PRENATAL_7MAIS",
+    },
+    ordem=f.ORDEM_REGIAO,
+    rotulo_grupo="Região",
+)
+
+f.tabela(tab_regiao, legenda="Indicadores selecionados por região de residência.")
+```
+
+```{python}
+uf_indicadores = {
+    "Cesárea (%)": "IND_CESAREA",
+    "Baixo peso (%)": "IND_BAIXO_PESO",
+    "Prematuros (%)": "IND_PREMATURO",
+    "Mães adolescentes (%)": "IND_MAE_ADOLESCENTE",
+    "Pré-natal 7+ consultas (%)": "IND_PRENATAL_7MAIS",
+}
+
+tab_uf = f.indicadores_por_grupo(df, "UF", uf_indicadores)
+
+f.plot_bars_pct(
+    df.filter(pl.col("UF").is_not_null()), "UF", ordenar_por_freq=True, horizontal=True,
+    titulo="Nascimentos por UF de residência da mãe", xlabel="UF",
+    figsize=(7, 8), tamanho_texto=7,
+)
+```
+
+```{python}
+f.tabela(tab_uf, legenda="Indicadores selecionados por UF de residência da mãe.")
+```
+
+\newpage
+
+# Características das mães
+
+```{python}
+mother_features = ["IDADEMAE", "ESTCIVMAE", "RACACORMAE", "QTDGESTANT", "ESCMAEAGR1"]
+
+df_mother = df.select(mother_features)
+```
+
+```{python}
+boxplot = (
+    pn.ggplot(df, pn.aes(y="IDADEMAE"))
+    + pn.geom_boxplot(fill = jama_colors[0])
+    + pn.coord_flip()
+    + pn.labs(title="Boxplot das idades das mães", y="Idade da Mãe")
+    + pn.theme_minimal()
+    + pn.theme(
+      legend_position="none",
+      axis_text_y=pn.element_blank(),
+      axis_ticks_major_y=pn.element_blank()
+    )
+)
+
+boxplot.show()
+```
+
+```{python}
+histograma = (
+    pn.ggplot(df, pn.aes(x="IDADEMAE"))
+    + pn.geom_histogram(bins=30, fill=jama_colors[0], color="white")
+    + pn.labs(title="Histograma das idades das mães", x="Idade da mãe (anos)", y="Frequência")
+    + pn.theme_minimal()
+)
+
+histograma.show()
+```
+
+```{python}
+f.plot_bars_pct(
+    df, "FAIXA_IDADEMAE", ordem=f.ORDEM_FAIXA_IDADEMAE,
+    titulo="Nascimentos por faixa etária da mãe", xlabel="Faixa etária",
+)
+```
+
+```{python}
+(
+    pn.ggplot(
+        df.filter(pl.col("REGIAO").is_not_null() & pl.col("IDADEMAE").is_not_null()),
+        pn.aes(x="REGIAO", y="IDADEMAE"),
+    )
+    + pn.geom_boxplot(fill=jama_colors[0], outlier_alpha=0.15)
+    + pn.scale_x_discrete(limits=f.ORDEM_REGIAO)
+    + pn.labs(title="Idade da mãe por região", x="Região", y="Idade da mãe (anos)")
+    + pn.theme_minimal()
+    + pn.theme(figure_size=(7, 4))
+)
+```
+
+```{python}
+mapa_estcivmae = {
+    1: "Solteira",
+    2: "Casada",
+    3: "Viúva",
+    4: "Separada judicialmente/divorciada",
+    5: "União estável",
+    9: "Ignorada",
+}
+
+f.plot_bars(df = df_mother, variavel = "ESTCIVMAE", mapa = mapa_estcivmae, titulo = "Estado civil da mãe", xlabel = "Estado civil")
+```
+
+```{python}
+mapa_racacor = {
+    1: "Branca",
+    2: "Preta",
+    3: "Amarela",
+    4: "Parda",
+    5: "Indígena",
+    9: "Ignorado"
+}
+
+f.plot_bars(df = df_mother, variavel = "RACACORMAE", mapa = mapa_racacor, titulo = "Raça/cor da mãe", xlabel = "Raça/cor")
+```
+
+
+```{python}
+mapa_escmaeagr1 = {
+    0: "Sem escolaridade",
+    1: "Fundamental I incompleto",
+    2: "Fundamental I completo",
+    3: "Fundamental II incompleto",
+    4: "Fundamental II completo",
+    5: "Ensino médio incompleto",
+    6: "Ensino médio completo",
+    7: "Superior incompleto",
+    8: "Superior completo",
+    9: "Ignorado",
+    10: "Fundamental I incompleto ou inespecífico",
+    11: "Fundamental II incompleto ou inespecífico",
+    12: "Ensino médio incompleto ou inespecífico",
+}
+
+
+f.plot_bars(df = df_mother, variavel = "ESCMAEAGR1", mapa = mapa_escmaeagr1, titulo = "Escolaridade da mãe (agregada, 2010)", xlabel = "Escolaridade", tamanho_texto = 6)
+```
+
+```{python}
+mapa_qtgest = {
+    0: "Primeira gestação",
+    1: "Uma gestação anterior",
+    2: "Duas gestações anteriores",
+    3: "Três ou mais gestações anteriores",
+    9: "Ignorado"
+}
+
+df_mother = df_mother.with_columns(
+    pl.when(pl.col("QTDGESTANT") > 20)
+    .then(9)
+    .when(pl.col("QTDGESTANT") >= 3)
+    .then(3)
+    .otherwise(pl.col("QTDGESTANT"))
+    .alias("QTDGESTANT")
+)
+
+f.plot_bars(df = df_mother, variavel = "QTDGESTANT", mapa = mapa_qtgest, titulo = "Quantidade de gestações anteriores", xlabel = "Qtd. gestações anteriores")
+```
+
+```{python}
+mapa_paridade = {0: "Nulípara (primeiro parto)", 1: "Multípara", 9: "Ignorado"}
+
+f.plot_bars_pct(
+    df, "PARIDADE", mapa=mapa_paridade,
+    titulo="Paridade da mãe", xlabel="Paridade",
+)
+```
+
+```{python}
+mapa_filvivo = {0: "Nenhum", 1: "1", 2: "2", 3: "3 ou mais", 9: "Ignorado"}
+
+f.plot_bars_pct(
+    f.cap_count(df, "QTDFILVIVO", teto=3), "QTDFILVIVO", mapa=mapa_filvivo,
+    titulo="Filhos vivos anteriores", xlabel="Número de filhos vivos",
+)
+```
+
+```{python}
+mapa_filmort = {0: "Nenhum", 1: "1", 2: "2 ou mais", 9: "Ignorado"}
+
+f.plot_bars_pct(
+    f.cap_count(df, "QTDFILMORT", teto=2), "QTDFILMORT", mapa=mapa_filmort,
+    titulo="Perdas anteriores (fetais/abortos e filhos mortos)", xlabel="Número de perdas anteriores",
+)
+```
+
+```{python}
+mapa_partnor = {0: "Nenhum", 1: "1", 2: "2", 3: "3 ou mais", 9: "Ignorado"}
+
+p_vaginais = f.plot_bars_pct(
+    f.cap_count(df, "QTDPARTNOR", teto=3), "QTDPARTNOR", mapa=mapa_partnor,
+    titulo="Partos vaginais anteriores", xlabel="Número de partos vaginais anteriores",
+)
+p_vaginais
+```
+
+```{python}
+f.plot_bars_pct(
+    f.cap_count(df, "QTDPARTCES", teto=3), "QTDPARTCES", mapa=mapa_partnor,
+    titulo="Cesáreas anteriores", xlabel="Número de cesáreas anteriores",
+)
+```
+
+\newpage
+
+# Características dos pais
+
+```{python}
+f.plot_hist(
+    df, "IDADEPAI", bins=40,
+    titulo="Idade do pai", xlabel="Idade do pai (anos)",
+)
+```
+
+```{python}
+pai_ignorado = df["IDADEPAI"].null_count() / N * 100
+dif = df.select((pl.col("IDADEPAI").cast(pl.Int64) - pl.col("IDADEMAE").cast(pl.Int64)).alias("DIF_IDADE")).drop_nulls()
+
+f.plot_hist(
+    dif, "DIF_IDADE", binwidth=1, xlim=(-20, 30), linhas=[0],
+    titulo="Diferença de idade entre pai e mãe", xlabel="Idade do pai − idade da mãe (anos)",
+)
+```
+
+A idade do pai não foi informada em **`{python} f.fmt_pct(pai_ignorado)`** dos registros, o que limita comparações entre grupos.
+
+\newpage
+
+# Gestação e pré-natal
+
+## Duração e tipo da gestação
+
+```{python}
+mapa_gestacao = {
+    1: "Menos de 22 semanas",
+    2: "22 a 27 semanas",
+    3: "28 a 31 semanas",
+    4: "32 a 36 semanas",
+    5: "37 a 41 semanas",
+    6: "42 semanas ou mais",
+    9: "Ignorado",
+}
+
+f.plot_bars_pct(
+    df, "GESTACAO", mapa=mapa_gestacao,
+    titulo="Duração da gestação (faixas)", xlabel="Semanas de gestação",
+    rotacao=20,
+)
+```
+
+```{python}
+f.plot_hist(
+    df, "SEMAGESTAC", binwidth=1, xlim=(20, 45), linhas=[37],
+    titulo="Semanas de gestação (linha tracejada: 37 semanas)", xlabel="Semanas de gestação",
+)
+```
+
+```{python}
+mapa_gravidez = {1: "Única", 2: "Dupla", 3: "Tripla ou mais", 9: "Ignorado"}
+
+f.plot_bars_pct(
+    df, "GRAVIDEZ", mapa=mapa_gravidez,
+    titulo="Tipo de gravidez", xlabel="Tipo de gravidez",
+)
+```
+
+## Assistência pré-natal
+
+```{python}
+mapa_consultas = {
+    1: "Nenhuma",
+    2: "1 a 3 consultas",
+    3: "4 a 6 consultas",
+    4: "7 ou mais consultas",
+    9: "Ignorado",
+}
+
+f.plot_bars_pct(
+    df, "CONSULTAS", mapa=mapa_consultas,
+    titulo="Consultas de pré-natal (faixas)", xlabel="Consultas de pré-natal",
+)
+```
+
+```{python}
+f.plot_hist(
+    df, "CONSPRENAT", binwidth=1, xlim=(0, 25), linhas=[6],
+    titulo="Número de consultas de pré-natal (linha tracejada: 6 consultas)", xlabel="Consultas de pré-natal",
+)
+```
+
+```{python}
+mapa_mesprenat = {i: f"{i}º mês" for i in range(1, 10)}
+mapa_mesprenat[0] = "0"
+
+f.plot_bars_pct(
+    df, "MESPRENAT", mapa=mapa_mesprenat, valor_nulo=99,
+    titulo="Mês de gestação em que o pré-natal foi iniciado", xlabel="Mês de início do pré-natal",
+    rotacao=0,
+)
+```
+
+```{python}
+mapa_kotelchuck = {
+    1: "Não realizou pré-natal",
+    2: "Inadequado",
+    3: "Intermediário",
+    4: "Adequado",
+    5: "Mais que adequado",
+    9: "Não classificado",
+}
+
+f.plot_bars_pct(
+    df, "KOTELCHUCK", mapa=mapa_kotelchuck,
+    titulo="Adequação do pré-natal (índice de Kotelchuck)", xlabel="Adequação do pré-natal",
+    rotacao=20,
+)
+```
+
+```{python}
+ordem_kotelchuck = list(dict.fromkeys(mapa_kotelchuck.values()))
+
+df_kot = f.rotular(df, "KOTELCHUCK", mapa_kotelchuck, "KOTELCHUCK_LBL")
+
+f.plot_stacked_pct(
+    df_kot, "REGIAO", "KOTELCHUCK_LBL",
+    titulo="Adequação do pré-natal por região", xlabel="Região", legenda="Adequação",
+    ordem_grupo=f.ORDEM_REGIAO, ordem_categoria=ordem_kotelchuck,
+)
+```
+
+O índice de Kotelchuck combina o mês de início do pré-natal e o número de consultas, ajustado pela duração da gestação.
+
+\newpage
+
+# Parto e assistência
+
+## Tipo de parto
+
+```{python}
+mapa_parto = {1: "Vaginal", 2: "Cesário", 9: "Ignorado"}
+
+f.plot_bars_pct(
+    df, "PARTO", mapa=mapa_parto,
+    titulo="Tipo de parto", xlabel="Tipo de parto",
+)
+```
+
+A proporção de partos cesáreos foi de **`{python} f.fmt_pct(cesarea)`**. Para referência, a Organização Mundial da Saúde (2015) afirma que taxas populacionais acima de 10% não estão associadas a redução da mortalidade materna e neonatal.
+
+```{python}
+tab_ces_uf = f.indicadores_por_grupo(df, "UF", {"Cesárea (%)": "IND_CESAREA"})
+
+f.plot_taxa(
+    tab_ces_uf, "UF", "Cesárea (%)",
+    titulo="Proporção de partos cesáreos por UF de residência", rotulo_eixo="Cesáreas (%)",
+    referencia=cesarea, figsize=(7, 8), tamanho_texto=7,
+)
+```
+
+```{python}
+tab_ces_dia = f.indicadores_por_grupo(
+    f.rotular(df, "DAY_WEEK", mapa_dia_semana, "DIA_SEMANA", valor_nulo=99),
+    "DIA_SEMANA", {"Cesárea (%)": "IND_CESAREA"},
+    ordem=list(mapa_dia_semana.values()),
+)
+
+f.plot_taxa(
+    tab_ces_dia, "DIA_SEMANA", "Cesárea (%)",
+    titulo="Proporção de partos cesáreos por dia da semana", rotulo_eixo="Cesáreas (%)",
+    referencia=cesarea, horizontal=False, ordenar=False, figsize=(7, 3.8), tamanho_texto=9,
+)
+```
+
+```{python}
+tab_ces_idade = f.indicadores_por_grupo(df, "FAIXA_IDADEMAE", {"Cesárea (%)": "IND_CESAREA"}, ordem=f.ORDEM_FAIXA_IDADEMAE)
+
+f.plot_taxa(
+    tab_ces_idade, "FAIXA_IDADEMAE", "Cesárea (%)",
+    titulo="Proporção de partos cesáreos por faixa etária da mãe", rotulo_eixo="Cesáreas (%)",
+    referencia=cesarea, horizontal=False, ordenar=False, figsize=(7, 3.8), tamanho_texto=9,
+)
+```
+
+## Classificação de Robson
+
+O grupo de Robson permite comparar taxas de cesárea entre populações obstétricas semelhantes. Considere a coluna *% das cesáreas* para ver quais grupos mais contribuem para a taxa geral.
+
+```{python}
+f.tabela(
+    f.tabela_robson(df),
+    legenda="Classificação de Robson: distribuição, taxa de cesárea e contribuição de cada grupo.",
+    direita=["Grupo"],
+)
+```
+
+## Apresentação fetal, trabalho de parto e assistência
+
+```{python}
+mapa_tpapresent = {1: "Cefálico", 2: "Pélvica ou podálica", 3: "Transversa", 9: "Ignorado"}
+
+f.plot_bars_pct(
+    df, "TPAPRESENT", mapa=mapa_tpapresent,
+    titulo="Apresentação fetal", xlabel="Apresentação",
+)
+```
+
+```{python}
+mapa_sttrabpart = {1: "Sim", 2: "Não", 3: "Não se aplica", 9: "Ignorado"}
+
+f.plot_bars_pct(
+    df, "STTRABPART", mapa=mapa_sttrabpart,
+    titulo="Trabalho de parto induzido", xlabel="Trabalho de parto induzido",
+)
+```
+
+```{python}
+mapa_tpnascassi = {
+    1: "Médico",
+    2: "Enfermagem/obstetriz",
+    3: "Parteira",
+    4: "Outros",
+    9: "Ignorado",
+}
+
+f.plot_bars_pct(
+    df, "TPNASCASSI", mapa=mapa_tpnascassi,
+    titulo="Responsável pela assistência ao parto", xlabel="Profissional",
+)
+```
+
+\newpage
+
+# Recém-nascidos
+
+
+```{python}
+mapa_sexo = {1: "Masculino", 2: "Feminino", 0: "Ignorado", 9: "Ignorado"}
+
+tab_sexo = f.freq_table(df, "SEXO", mapa_sexo, rotulo="Sexo")
+n_masc = tab_sexo.filter(pl.col("Sexo") == "Masculino")["Nascimentos"].sum()
+n_fem = tab_sexo.filter(pl.col("Sexo") == "Feminino")["Nascimentos"].sum()
+razao_sexos = n_masc / n_fem * 100
+
+f.plot_bars_pct(
+    df, "SEXO", mapa=mapa_sexo,
+    titulo="Sexo do recém-nascido", xlabel="Sexo",
+)
+```
+
+Nasceram **`{python} f.fmt_num(razao_sexos, 1)`** meninos para cada 100 meninas.
+
+```{python}
+f.plot_bars_pct(
+    df, "RACACOR", mapa=mapa_racacor,
+    titulo="Raça/cor do recém-nascido", xlabel="Raça/cor",
+    ordenar_por_freq=True,
+)
+```
+
+
+```{python}
+f.plot_hist(
+    df, "PESO", binwidth=100, xlim=(500, 5500), linhas=[2500],
+    titulo="Peso ao nascer (linha tracejada: 2.500 g)", xlabel="Peso ao nascer (g)",
+)
+```
+
+```{python}
+f.plot_bars_pct(
+    df, "FAIXA_PESO", ordem=f.ORDEM_FAIXA_PESO,
+    titulo="Nascimentos por faixa de peso", xlabel="Faixa de peso", rotacao=20,
+)
+```
+
+A proporção de recém-nascidos com baixo peso (menos de 2.500 g) foi de **`{python} f.fmt_pct(baixo_peso)`**, e a de prematuros (menos de 37 semanas) foi de **`{python} f.fmt_pct(prematuro)`**.
+
+```{python}
+tab_bp_uf = f.indicadores_por_grupo(df, "UF", {"Baixo peso (%)": "IND_BAIXO_PESO"})
+
+f.plot_taxa(
+    tab_bp_uf, "UF", "Baixo peso (%)",
+    titulo="Proporção de baixo peso ao nascer por UF de residência", rotulo_eixo="Baixo peso (%)",
+    referencia=baixo_peso, figsize=(7, 8), tamanho_texto=7,
+)
+```
+
+```{python}
+tab_bp_idade = f.indicadores_por_grupo(df, "FAIXA_IDADEMAE", {"Baixo peso (%)": "IND_BAIXO_PESO"}, ordem=f.ORDEM_FAIXA_IDADEMAE)
+
+f.plot_taxa(
+    tab_bp_idade, "FAIXA_IDADEMAE", "Baixo peso (%)",
+    titulo="Baixo peso ao nascer por faixa etária da mãe", rotulo_eixo="Baixo peso (%)",
+    referencia=baixo_peso, horizontal=False, ordenar=False, figsize=(7, 3.8), tamanho_texto=9,
+)
+```
+
+```{python}
+mapa_idanomal = {1: "Sim", 2: "Não", 9: "Ignorado"}
+
+f.plot_bars_pct(
+    df, "IDANOMAL", mapa=mapa_idanomal,
+    titulo="Presença de anomalia congênita", xlabel="Anomalia congênita",
+)
+```
+
+\newpage
+
+# Local de nascimento
+
+```{python}
+mapa_locnasc = {
+    1: "Hospital",
+    2: "Outros estabelecimentos de saúde",
+    3: "Domicílio",
+    4: "Outros",
+    5: "Aldeia indígena",
+    9: "Ignorado",
+}
+
+f.plot_bars_pct(
+    df, "LOCNASC", mapa=mapa_locnasc,
+    titulo="Local de ocorrência do nascimento", xlabel="Local", rotacao=20,
+)
+```
+
+```{python}
+top_mun = (
+    df.select(pl.col("CODMUNNASC").cast(pl.Utf8).alias("Código IBGE (6 dígitos)"))
+    .drop_nulls()
+    .group_by("Código IBGE (6 dígitos)").len()
+    .rename({"len": "Nascimentos"})
+    .sort("Nascimentos", descending=True)
+    .head(10)
+    .with_columns((pl.col("Nascimentos") / N * 100).alias("% do total"))
+)
+
+f.tabela(top_mun, legenda="Dez municípios com mais nascimentos (por município de ocorrência).", direita=["Código IBGE (6 dígitos)"])
+```
+
+```{python}
+fora_mun, validos_mun = f.taxa_global(df, "IND_PARTO_FORA_MUN_RESIDENCIA")
+
+tab_migr_uf = f.indicadores_por_grupo(df, "UF", {"Parto fora do município de residência (%)": "IND_PARTO_FORA_MUN_RESIDENCIA"})
+
+f.plot_taxa(
+    tab_migr_uf, "UF", "Parto fora do município de residência (%)",
+    titulo="Partos fora do município de residência da mãe, por UF", rotulo_eixo="Partos fora do município (%)",
+    referencia=fora_mun, figsize=(7, 8), tamanho_texto=7,
+)
+```
+
+```{python}
+estab = (
+    df.select(pl.col("CODESTAB").cast(pl.Utf8).alias("CODESTAB"))
+    .drop_nulls()
+    .group_by("CODESTAB").len()
+    .rename({"len": "n"})
+    .sort("n", descending=True)
+)
+
+n_estab = estab.height
+conc_top10 = estab.head(10)["n"].sum() / estab["n"].sum() * 100
+mediana_estab = estab["n"].median()
+
+f.tabela(
+    pl.DataFrame({
+        "Medida": [
+            "Estabelecimentos com ao menos um nascimento",
+            "Mediana de nascimentos por estabelecimento",
+            "Nascimentos concentrados nos 10 maiores estabelecimentos (%)",
+        ],
+        "Valor": [f.fmt_int(n_estab), f.fmt_num(mediana_estab, 0), f.fmt_num(conc_top10, 1)],
+    }),
+    legenda="Concentração dos nascimentos por estabelecimento (CNES).",
+    direita=["Valor"],
+)
+```
+
+```{python}
+f.plot_hist(
+    estab.rename({"n": "Nascimentos por estabelecimento"}), "Nascimentos por estabelecimento", bins=30, log_x=True,
+    titulo="Distribuição do número de nascimentos por estabelecimento (escala log)",
+    xlabel="Nascimentos por estabelecimento (escala log)",
+)
+```
+
+\newpage
+
+# Desigualdades nos desfechos e na assistência
+
+Esta seção cruza indicadores com a **raça/cor** e a **escolaridade** da mãe. São análises descritivas, sem ajuste para outros fatores.
+
+```{python}
+indic_desig = {
+    "Cesárea (%)": "IND_CESAREA",
+    "Baixo peso (%)": "IND_BAIXO_PESO",
+    "Prematuros (%)": "IND_PREMATURO",
+    "Pré-natal 7+ consultas (%)": "IND_PRENATAL_7MAIS",
+    "Pré-natal adequado (%)": "IND_PRENATAL_ADEQUADO",
+}
+
+tab_raca = f.indicadores_por_grupo(df, "RACACOR_MAE", indic_desig, ordem=f.ORDEM_RACACOR, rotulo_grupo="Raça/cor da mãe")
+
+f.tabela(tab_raca, legenda="Indicadores por raça/cor da mãe.")
+```
+
+```{python}
+f.plot_taxa(
+    f.indicadores_por_grupo(df.filter(pl.col("RACACOR_MAE") != "Ignorado"), "RACACOR_MAE", {"Pré-natal 7+ consultas (%)": "IND_PRENATAL_7MAIS"}, ordem=f.ORDEM_RACACOR),
+    "RACACOR_MAE", "Pré-natal 7+ consultas (%)",
+    titulo="Mães com 7 ou mais consultas de pré-natal, por raça/cor",
+    rotulo_eixo="7+ consultas (%)", horizontal=False, ordenar=False, figsize=(7, 3.8), tamanho_texto=9,
+)
+```
+
+```{python}
+f.plot_taxa(
+    f.indicadores_por_grupo(df.filter(pl.col("RACACOR_MAE") != "Ignorado"), "RACACOR_MAE", {"Baixo peso (%)": "IND_BAIXO_PESO"}, ordem=f.ORDEM_RACACOR),
+    "RACACOR_MAE", "Baixo peso (%)",
+    titulo="Baixo peso ao nascer por raça/cor da mãe",
+    rotulo_eixo="Baixo peso (%)", horizontal=False, ordenar=False, figsize=(7, 3.8), tamanho_texto=9,
+)
+```
+
+```{python}
+tab_esc = f.indicadores_por_grupo(df, "ESCOLARIDADE_MAE", indic_desig, ordem=f.ORDEM_ESCOLARIDADE_AGR, rotulo_grupo="Escolaridade da mãe")
+
+f.tabela(tab_esc, legenda="Indicadores por escolaridade da mãe (agregada em quatro níveis).")
+```
+
+```{python}
+f.plot_taxa(
+    f.indicadores_por_grupo(df.filter(pl.col("ESCOLARIDADE_MAE") != "Ignorado"), "ESCOLARIDADE_MAE", {"Cesárea (%)": "IND_CESAREA"}, ordem=f.ORDEM_ESCOLARIDADE_AGR),
+    "ESCOLARIDADE_MAE", "Cesárea (%)",
+    titulo="Proporção de partos cesáreos por escolaridade da mãe",
+    rotulo_eixo="Cesáreas (%)", horizontal=False, ordenar=False, figsize=(7, 3.8), tamanho_texto=9,
+)
+```
+
+```{python}
+f.plot_taxa(
+    f.indicadores_por_grupo(df.filter(pl.col("ESCOLARIDADE_MAE") != "Ignorado"), "ESCOLARIDADE_MAE", {"Pré-natal adequado (%)": "IND_PRENATAL_ADEQUADO"}, ordem=f.ORDEM_ESCOLARIDADE_AGR),
+    "ESCOLARIDADE_MAE", "Pré-natal adequado (%)",
+    titulo="Pré-natal adequado ou mais que adequado, por escolaridade da mãe",
+    rotulo_eixo="Pré-natal adequado (%)", horizontal=False, ordenar=False, figsize=(7, 3.8), tamanho_texto=9,
+)
+```
+
+\newpage
+
+# Informações e Limitações
+
+- **Fonte:** SINASC/Ministério da Saúde, arquivos anuais do OpenDATASUS. Dados preliminares podem ser revistos.
+- **Prematuridade:** nascimentos com menos de 37 semanas, a partir da variável `GESTACAO`.
+- **Baixo peso ao nascer:** menos de 2.500 g, a partir de `PESO`. A variável `LOWBIRTHWEIGHT` do pipeline usa `<= 2500` e trata peso ausente como 0; neste relatório foi usado o indicador `IND_BAIXO_PESO`, que exclui peso ausente do denominador.
+- **Cesárea:** proporção entre os partos com tipo informado (vaginal ou cesário).
+- **Pré-natal adequado:** índice de Kotelchuck igual a "adequado" ou "mais que adequado".
+- **Região e UF:** definidas pelo município de residência da mãe (`CODMUNRES`).
+- **Parto fora do município de residência:** `CODMUNRES` diferente de `CODMUNNASC`.
+- **Limitações:** análises descritivas, sem ajuste por fatores de confusão; a completude varia entre variáveis e UFs.
