@@ -76,6 +76,7 @@ cesarea, _ = f.taxa_global(df, "IND_CESAREA")
 baixo_peso, _ = f.taxa_global(df, "IND_BAIXO_PESO")
 prematuro, _ = f.taxa_global(df, "IND_PREMATURO")
 adolescente, _ = f.taxa_global(df, "IND_MAE_ADOLESCENTE")
+pai_ignorado = df["IDADEPAI"].null_count() / N * 100
 ```
 
 # Sobre os dados
@@ -94,6 +95,8 @@ A consulta foi realizada no dia `{python} datetime.today().strftime("%d/%m/%Y")`
 \newpage
 
 # Panorama geral
+
+Esta seção resume o ano em poucos números: os principais indicadores de saúde materno-infantil (como partos cesáreos, prematuridade, baixo peso ao nascer e adequação do pré-natal) e as estatísticas descritivas das variáveis numéricas.
 
 ```{python}
 indicadores = {
@@ -146,6 +149,8 @@ f.tabela(
 \newpage
 
 # Quando e onde nascem os brasileiros
+
+Aqui observamos como os `{python} f.fmt_int(N)` nascimentos de `{python} ANO` se distribuem no tempo (por mês, trimestre, dia da semana e dia do mês) e no território, por região e unidade da federação de residência da mãe. A comparação ajuda a identificar sazonalidade e diferenças regionais no volume de nascimentos e em alguns indicadores selecionados.
 
 ## Distribuição ao longo do tempo
 
@@ -232,6 +237,8 @@ f.tabela(tab_uf, legenda="Indicadores selecionados por UF de residência da mãe
 \newpage
 
 # Características das mães
+
+Esta seção traça o perfil das mães: idade, estado civil, raça/cor, escolaridade e histórico obstétrico (gestações, partos e perdas anteriores). Essas características ajudam a contextualizar os desfechos analisados adiante e a entender quem são as mulheres que deram à luz no período.
 
 ```{python}
 mother_features = ["IDADEMAE", "ESTCIVMAE", "RACACORMAE", "QTDGESTANT", "ESCMAEAGR1"]
@@ -405,6 +412,9 @@ f.plot_bars_pct(
 
 # Características dos pais
 
+As informações sobre os pais são mais limitadas no SINASC. Esta seção apresenta a distribuição da idade paterna e a diferença de idade entre pai e mãe. A idade do pai não foi informada em `{python} f.fmt_pct(pai_ignorado)` dos registros, o que limita comparações entre grupos.
+
+
 ```{python}
 f.plot_hist(
     df, "IDADEPAI", bins=40,
@@ -413,7 +423,6 @@ f.plot_hist(
 ```
 
 ```{python}
-pai_ignorado = df["IDADEPAI"].null_count() / N * 100
 dif = df.select((pl.col("IDADEPAI").cast(pl.Int64) - pl.col("IDADEMAE").cast(pl.Int64)).alias("DIF_IDADE")).drop_nulls()
 
 f.plot_hist(
@@ -422,11 +431,11 @@ f.plot_hist(
 )
 ```
 
-A idade do pai não foi informada em **`{python} f.fmt_pct(pai_ignorado)`** dos registros, o que limita comparações entre grupos.
-
 \newpage
 
 # Gestação e pré-natal
+
+Esta seção descreve como foram as gestações e o acompanhamento pré-natal: duração da gestação, tipo de gravidez, número de consultas, momento de início do pré-natal e sua adequação segundo o índice de Kotelchuck, inclusive por região. Os indicadores dão uma ideia do acesso e da qualidade da assistência antes do parto.
 
 ## Duração e tipo da gestação
 
@@ -534,7 +543,10 @@ O índice de Kotelchuck combina o mês de início do pré-natal e o número de c
 
 # Parto e assistência
 
+Aqui o foco é o momento do parto: a proporção de cesáreas (`{python} f.fmt_pct(cesarea)` no país) e como ela varia por UF, dia da semana e idade da mãe, além da classificação de Robson, que permite comparar taxas entre grupos obstétricos semelhantes. A seção traz ainda a apresentação fetal, a indução do trabalho de parto e o profissional responsável pela assistência.
+
 ## Tipo de parto
+
 
 ```{python}
 mapa_parto = {1: "Vaginal", 2: "Cesário", 9: "Ignorado"}
@@ -555,6 +567,7 @@ f.plot_taxa(
 )
 ```
 
+
 ```{python}
 tab_ces_dia = f.indicadores_por_grupo(
     f.rotular(df, "DAY_WEEK", mapa_dia_semana, "DIA_SEMANA", valor_nulo=99),
@@ -568,6 +581,7 @@ f.plot_taxa(
     referencia=cesarea, horizontal=False, ordenar=False, figsize=(7, 3.8), tamanho_texto=9,
 )
 ```
+
 
 ```{python}
 tab_ces_idade = f.indicadores_por_grupo(df, "FAIXA_IDADEMAE", {"Cesárea (%)": "IND_CESAREA"}, ordem=f.ORDEM_FAIXA_IDADEMAE)
@@ -630,6 +644,14 @@ f.plot_bars_pct(
 
 # Recém-nascidos
 
+Esta seção caracteriza os recém-nascidos: sexo, raça/cor, peso ao nascer e presença de anomalia congênita. Dá atenção especial ao baixo peso, mostrando como sua proporção varia entre as UFs e conforme a idade da mãe.
+
+```{python}
+f.plot_hist(
+    df, "PESO", binwidth=100, xlim=(500, 5500), linhas=[2500],
+    titulo="Peso ao nascer (linha tracejada: 2.500 g)", xlabel="Peso ao nascer (g)",
+)
+```
 
 ```{python}
 mapa_sexo = {1: "Masculino", 2: "Feminino", 0: "Ignorado", 9: "Ignorado"}
@@ -645,7 +667,7 @@ f.plot_bars_pct(
 )
 ```
 
-Nasceram **`{python} f.fmt_num(razao_sexos, 1)`** meninos para cada 100 meninas.
+Nasceram `{python} f.fmt_num(razao_sexos, 1)` meninos para cada 100 meninas.
 
 ```{python}
 f.plot_bars_pct(
@@ -657,20 +679,13 @@ f.plot_bars_pct(
 
 
 ```{python}
-f.plot_hist(
-    df, "PESO", binwidth=100, xlim=(500, 5500), linhas=[2500],
-    titulo="Peso ao nascer (linha tracejada: 2.500 g)", xlabel="Peso ao nascer (g)",
-)
-```
-
-```{python}
 f.plot_bars_pct(
     df, "FAIXA_PESO", ordem=f.ORDEM_FAIXA_PESO,
     titulo="Nascimentos por faixa de peso", xlabel="Faixa de peso", rotacao=20,
 )
 ```
 
-A proporção de recém-nascidos com baixo peso (menos de 2.500 g) foi de **`{python} f.fmt_pct(baixo_peso)`**, e a de prematuros (menos de 37 semanas) foi de **`{python} f.fmt_pct(prematuro)`**.
+A proporção de recém-nascidos com baixo peso (menos de 2.500 g) foi de `{python} f.fmt_pct(baixo_peso)`, e a de prematuros (menos de 37 semanas) foi de `{python} f.fmt_pct(prematuro)`.
 
 ```{python}
 tab_bp_uf = f.indicadores_por_grupo(df, "UF", {"Baixo peso (%)": "IND_BAIXO_PESO"})
@@ -704,6 +719,8 @@ f.plot_bars_pct(
 \newpage
 
 # Local de nascimento
+
+Esta seção mostra onde os nascimentos aconteceram: tipo de local de ocorrência, municípios com mais nascimentos, partos realizados fora do município de residência da mãe e concentração dos nascimentos entre os estabelecimentos de saúde. Os resultados ajudam a entender o fluxo de deslocamento das gestantes e a organização da rede de atenção ao parto.
 
 ```{python}
 mapa_locnasc = {
@@ -847,6 +864,8 @@ f.plot_taxa(
 \newpage
 
 # Informações e Limitações
+
+Esta seção reúne as definições dos indicadores e as principais ressalvas para a interpretação dos resultados, a fim de que as análises sejam lidas com os devidos cuidados.
 
 - **Fonte:** SINASC/Ministério da Saúde, arquivos anuais do OpenDATASUS. Dados preliminares podem ser revistos.
 - **Prematuridade:** nascimentos com menos de 37 semanas, a partir da variável `GESTACAO`.
